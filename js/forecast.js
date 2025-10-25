@@ -76,7 +76,6 @@ function switchTab(tab) {
         hourlySection.classList.remove("active");
     }
 }
-
 // Handle search form submission
 async function handleSearch(e) {
     e.preventDefault();
@@ -89,15 +88,16 @@ async function handleSearch(e) {
     hideForecast();
     hideError();
     showLoading();
+
     try {
         const coordinates = await getCityCoordinates(cityName);
-        console.log('Coordinates found:', coordinates);
+        console.log('City coordinates:', coordinates);
         const forecastData = await getForecastData(coordinates.lat, coordinates.lon);
-        console.log('Forecast data fetched:', forecastData);
+        console.log('Forecast data fetched (search):', forecastData);
         displayForecast(forecastData, coordinates);
     } catch (error) {
-        console.error("Error:", error);
-        showError(error.message);
+        console.error('Search error:', error);
+        showError(error.message || "Failed to fetch forecast for the specified city.");
     } finally {
         hideLoading();
     }
@@ -219,19 +219,17 @@ async function getForecastData(lat, lon) {
     
     return {
         city: data.city,
-        hourly: data.list.slice(0, 8),  // Next 24 hours (8 x 3-hour periods)
-        daily: groupByDay(data.list)     // Group into daily forecasts
+        hourly: data.list, // Show all available forecast points (up to 40, every 3 hours)
+        daily: groupByDay(data.list)
     };
 }
 
 // Group 3-hour forecast data by day for 7-day forecast
 function groupByDay(forecastList) {
     const days = {};
-    
     forecastList.forEach(item => {
         const date = new Date(item.dt * 1000);
         const dayKey = date.toDateString();
-        
         if (!days[dayKey]) {
             days[dayKey] = {
                 date: date,
@@ -242,15 +240,12 @@ function groupByDay(forecastList) {
                 pop: []
             };
         }
-        
         days[dayKey].temps.push(item.main.temp);
         days[dayKey].weather.push(item.weather[0]);
         days[dayKey].humidity.push(item.main.humidity);
         days[dayKey].wind.push(item.wind.speed);
         days[dayKey].pop.push(item.pop || 0);
     });
-    
-    // Convert to array and calculate averages
     return Object.values(days).map(day => {
         // Get the most common weather condition
         const weatherCounts = {};
@@ -261,7 +256,6 @@ function groupByDay(forecastList) {
         const dominantWeather = day.weather.reduce((prev, curr) => 
             (weatherCounts[curr.main] > weatherCounts[prev.main] ? curr : prev)
         );
-        
         return {
             dt: Math.floor(day.date.getTime() / 1000),
             temp: {
@@ -337,18 +331,26 @@ function createHourlyChart(hourlyData) {
         {
             name: "Temperature",
             values: hourlyData.map(hour => hour && hour.main ? Math.round(hour.main.temp) : null),
-            chartType: "line"
+            chartType: "line",
         },
         {
             name: "Feels Like",
             values: hourlyData.map(hour => hour && hour.main ? Math.round(hour.main.feels_like) : null),
-            chartType: "line"
+            chartType: "line",
         },
         {
-            name: "Humidity",
-            values: hourlyData.map(hour => hour && hour.main ? hour.main.humidity : null),
-            chartType: "line"
-        }
+            name: "Rain (mm/h)",
+            values: hourlyData.map(hour => {
+                let rain = 0;
+                if (hour && hour.rain) {
+                    if (typeof hour.rain['1h'] !== 'undefined') rain = hour.rain['1h'];
+                    else if (typeof hour.rain['3h'] !== 'undefined') rain = hour.rain['3h'] / 3;
+                }
+                return Math.max(0, rain);
+            }),
+            chartType: "bar",
+            y2Axis: true,
+        },
     ];
 
     // Destroy previous chart if exists
@@ -377,20 +379,31 @@ function createHourlyChart(hourlyData) {
         data: chartData,
         type: "axis-mixed",
         height: 300,
-        colors: ["#ff6b6b", "#ffa726", "#4ecdc4"],
+        colors: ["#ff6b6b", "#ffa726", "#4dabf7"],
         lineOptions: {
             regionFill: 1,
             hideDots: 0,
             heatline: 0,
             spline: 1
         },
+        barOptions: {
+            spaceRatio: 0.5
+        },
         axisOptions: {
             xAxisMode: "tick",
-            xIsSeries: false
+            xIsSeries: false,
+            yAxisMode: "span",
+            y2AxisMode: "span"
         },
         tooltipOptions: {
             formatTooltipX: d => d,
-            formatTooltipY: d => d + "°C"
+            formatTooltipY: (d, index) => {
+                // Check if this is the rain dataset (3rd dataset, index 2)
+                if (index === 2) {
+                    return d + " mm/h";
+                }
+                return d + "°C";
+            }
         }
     });
 }
