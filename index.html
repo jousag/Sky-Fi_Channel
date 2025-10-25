@@ -10,14 +10,17 @@
 </head>
 <body>
     <nav class="navbar">
-        <a class="navbar-brand" href="#">☀️ Weather Search</a>
+        <a class="navbar-brand" href="index.html">☀️ Weather Search</a>
         <div class="nav-actions">
+            <div class="nav-links">
+                <a href="index.html" class="nav-link active">Current</a>
+                <a href="forecast.html" class="nav-link">Forecast</a>
+            </div>
             <form id="search-form" role="search">
                 <input type="text" id="city-input" placeholder="Enter city name..." required>
                 <button type="submit" id="search-btn">Search</button>
             </form>
-            <button type="button" id="location-btn">📍 My Location</button>
-            <button type="button" id="open-map">🗺️ Open Map</button>
+            <button type="button" id="location-btn" class="location-btn">📍 My Location</button>
         </div>
     </nav>
 

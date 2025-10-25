@@ -8,15 +8,10 @@ const weatherContainer = document.getElementById('weather-container');
 const errorMessage = document.getElementById('error-message');
 const loading = document.getElementById('loading');
 const locationBtn = document.getElementById('location-btn');
-const openMapBtn = document.getElementById('open-map');
-
 
 // Event Listeners
 searchForm.addEventListener('submit', handleSearch);
 locationBtn.addEventListener('click', handleLocationRequest);
-openMapBtn.addEventListener('click', () => {
-    window.open('map.html', '_blank');
-});
 
 async function handleSearch(e) {
     e.preventDefault();
