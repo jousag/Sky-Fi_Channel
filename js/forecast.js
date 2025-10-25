@@ -1,22 +1,14 @@
 "use strict";
 
-// OpenWeatherMap API Key
 const API_KEY = "4dde6e137f0d145d346da61d7086e193";
 
 // DOM Elements - will be initialized after DOM loads
 let searchForm, cityInput, forecastContainer, errorMessage, loading, locationBtn;
 let hourlyForecast, dailyForecast, tabButtons, hourlySection, dailySection;
 
-// Chart instance
 let hourlyChart = null;
 
-console.log("Combined forecast page loaded");
-
-// Initialize after DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded - initializing elements');
-    
-    // Initialize DOM elements
     searchForm = document.getElementById("search-form");
     cityInput = document.getElementById("city-input");
     forecastContainer = document.getElementById("forecast-container");
@@ -28,26 +20,13 @@ document.addEventListener('DOMContentLoaded', function() {
     tabButtons = document.querySelectorAll(".tab-btn");
     hourlySection = document.getElementById("hourly-forecast-section");
     dailySection = document.getElementById("daily-forecast-section");
-    
-    console.log('Elements found:', {
-        searchForm: !!searchForm,
-        cityInput: !!cityInput,
-        locationBtn: !!locationBtn,
-        forecastContainer: !!forecastContainer
-    });
-
     // Event Listeners
     if (searchForm) {
         searchForm.addEventListener("submit", handleSearch);
-        console.log('Search form listener attached');
     }
-
     if (locationBtn) {
         locationBtn.addEventListener("click", handleLocationRequest);
-        console.log('Location button listener attached');
     }
-
-    // Tab switching
     tabButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             const tab = btn.dataset.tab;
@@ -56,9 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Switch between hourly and daily tabs
 function switchTab(tab) {
-    // Update tab buttons
     tabButtons.forEach(btn => {
         if (btn.dataset.tab === tab) {
             btn.classList.add("active");
@@ -66,8 +43,6 @@ function switchTab(tab) {
             btn.classList.remove("active");
         }
     });
-    
-    // Update sections
     if (tab === "hourly") {
         hourlySection.classList.add("active");
         dailySection.classList.remove("active");
@@ -76,11 +51,10 @@ function switchTab(tab) {
         hourlySection.classList.remove("active");
     }
 }
-// Handle search form submission
+
 async function handleSearch(e) {
     e.preventDefault();
     const cityName = cityInput.value.trim();
-    console.log('Search submitted for city:', cityName);
     if (!cityName) {
         showError("Please enter a city name");
         return;
@@ -93,17 +67,14 @@ async function handleSearch(e) {
         const coordinates = await getCityCoordinates(cityName);
         console.log('City coordinates:', coordinates);
         const forecastData = await getForecastData(coordinates.lat, coordinates.lon);
-        console.log('Forecast data fetched (search):', forecastData);
         displayForecast(forecastData, coordinates);
     } catch (error) {
         console.error('Search error:', error);
-        showError(error.message || "Failed to fetch forecast for the specified city.");
     } finally {
         hideLoading();
     }
 }
 
-// Handle location button click
 async function handleLocationRequest() {
     if (!navigator.geolocation) {
         showError("Geolocation is not supported by your browser");
@@ -125,22 +96,17 @@ async function handleLocationRequest() {
             });
         });
         const { latitude, longitude } = position.coords;
-        console.log('Location found:', latitude, longitude);
         const forecastData = await getForecastData(latitude, longitude);
-        console.log('Forecast data fetched (location):', forecastData);
-        // Get city name from reverse geocoding
-        const cityInfo = await reverseGeocode(latitude, longitude);
+        const city = (forecastData && forecastData.city) ? forecastData.city : {};
         const coordinates = {
             lat: latitude,
             lon: longitude,
-            name: cityInfo.name || "Your Location",
-            country: cityInfo.country || "",
-            state: cityInfo.state || ""
+            name: city.name || "Your Location",
+            country: city.country || "",
+            state: ""
         };
-        console.log('Reverse geocoded city info:', cityInfo);
         displayForecast(forecastData, coordinates);
     } catch (error) {
-        console.error("Geolocation error:", error);
         if (error.code === 1) {
             showError("Location access denied. Please enable location permissions.");
         } else if (error.code === 2) {
@@ -157,16 +123,11 @@ async function handleLocationRequest() {
     }
 }
 
+
 // Get city coordinates using OpenWeatherMap Geocoding API
 async function getCityCoordinates(cityName) {
     const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(cityName)}&limit=1&appid=${API_KEY}`;
-    
     const response = await fetch(url);
-    
-    if (!response.ok) {
-        throw new Error("Failed to fetch city data");
-    }
-    
     const data = await response.json();
     
     if (!data || data.length === 0) {
@@ -183,27 +144,7 @@ async function getCityCoordinates(cityName) {
     };
 }
 
-// Reverse geocode coordinates to get city name
-async function reverseGeocode(lat, lon) {
-    const url = `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${API_KEY}`;
-    
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data && data.length > 0) {
-            return {
-                name: data[0].name,
-                country: data[0].country,
-                state: data[0].state || ""
-            };
-        }
-    } catch (error) {
-        console.error("Reverse geocoding error:", error);
-    }
-    
-    return { name: "Your Location", country: "", state: "" };
-}
+
 
 // Get both hourly and daily forecast data
 async function getForecastData(lat, lon) {
@@ -247,7 +188,6 @@ function groupByDay(forecastList) {
         days[dayKey].pop.push(item.pop || 0);
     });
     return Object.values(days).map(day => {
-        // Get the most common weather condition
         const weatherCounts = {};
         day.weather.forEach(w => {
             const key = w.main;
