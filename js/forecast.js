@@ -1,6 +1,8 @@
-"use strict";
-
+// OpenWeatherMap API Key
 const API_KEY = "4dde6e137f0d145d346da61d7086e193";
+
+//Api key for weather data
+const WEATHER_API_KEY = "d0ef5e5ed0644742aac165611252610";
 
 // DOM Elements - will be initialized after DOM loads
 let searchForm, cityInput, forecastContainer, errorMessage, loading, locationBtn;
@@ -36,20 +38,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function switchTab(tab) {
-    tabButtons.forEach(btn => {
-        if (btn.dataset.tab === tab) {
-            btn.classList.add("active");
-        } else {
-            btn.classList.remove("active");
-        }
-    });
-    if (tab === "hourly") {
-        hourlySection.classList.add("active");
-        dailySection.classList.remove("active");
-    } else {
-        dailySection.classList.add("active");
-        hourlySection.classList.remove("active");
-    }
+    tabButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
+    hourlySection.classList.toggle("active", tab === "hourly");
+    dailySection.classList.toggle("active", tab === "daily");
 }
 
 async function handleSearch(e) {
@@ -65,11 +56,10 @@ async function handleSearch(e) {
 
     try {
         const coordinates = await getCityCoordinates(cityName);
-        console.log('City coordinates:', coordinates);
         const forecastData = await getForecastData(coordinates.lat, coordinates.lon);
         displayForecast(forecastData, coordinates);
     } catch (error) {
-        console.error('Search error:', error);
+        showError(error.message || 'Failed to fetch forecast for the specified city.');
     } finally {
         hideLoading();
     }
@@ -149,7 +139,8 @@ async function getCityCoordinates(cityName) {
 // Get both hourly and daily forecast data
 async function getForecastData(lat, lon) {
     const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`;
-    
+
+
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -157,6 +148,7 @@ async function getForecastData(lat, lon) {
     }
     
     const data = await response.json();
+    console.log('Forecast data fetched:', data);
     
     return {
         city: data.city,
@@ -206,37 +198,32 @@ function groupByDay(forecastList) {
             weather: [dominantWeather],
             humidity: Math.round(day.humidity.reduce((a, b) => a + b) / day.humidity.length),
             wind_speed: day.wind.reduce((a, b) => a + b) / day.wind.length,
-            pop: Math.max(...day.pop)
+            pop: Math.round((Math.max(...day.pop) || 0) * 100)
         };
     }).slice(0, 7); // Limit to 7 days
 }
 
 // Display both forecasts
 function displayForecast(data, coordinates) {
-    console.log('Displaying forecast:', data, coordinates);
     // Defensive: check for missing data
     if (!data || !Array.isArray(data.hourly) || data.hourly.length === 0 || !Array.isArray(data.daily) || data.daily.length === 0) {
         showError('No forecast data available.');
-        console.error('No forecast data available:', data);
         hideForecast();
         return;
     }
-    // Update header
-    document.getElementById("city-name").textContent = 
-        `${coordinates.name}${coordinates.country ? ", " + coordinates.country : ""}`;
-    document.getElementById("coordinates").textContent = 
-        `Lat: ${coordinates.lat.toFixed(4)}, Lon: ${coordinates.lon.toFixed(4)}`;
-    // Clear previous forecasts
+    document.getElementById("city-name").textContent = `${coordinates.name}${coordinates.country ? ", " + coordinates.country : ""}`;
+    document.getElementById("coordinates").textContent = `Lat: ${coordinates.lat.toFixed(4)}, Lon: ${coordinates.lon.toFixed(4)}`;
+
     hourlyForecast.innerHTML = "";
     dailyForecast.innerHTML = "";
-    // Create hourly chart
+
+
     createHourlyChart(data.hourly);
-    // Create hourly forecast cards
     data.hourly.forEach((hour, index) => {
         const card = createHourlyCard(hour, index === 0);
         hourlyForecast.appendChild(card);
     });
-    // Create daily forecast cards
+
     data.daily.forEach((day, index) => {
         const card = createDailyCard(day, index === 0);
         dailyForecast.appendChild(card);
@@ -245,27 +232,18 @@ function displayForecast(data, coordinates) {
 }
 
 function createHourlyChart(hourlyData) {
-    // Debug: Log hourlyData
-    console.log('Hourly data for chart:', hourlyData);
-    // Check if Frappe Charts is loaded
-    if (typeof frappe === 'undefined') {
-        showError('Frappe Charts library not loaded');
-        console.error('Frappe Charts library not loaded');
-        return;
-    }
-    // Check if hourlyData is valid
     if (!Array.isArray(hourlyData) || hourlyData.length === 0) {
         showError('No hourly forecast data available for chart.');
-        console.error('No hourly forecast data available for chart:', hourlyData);
         return;
     }
 
-    const labels = hourlyData.map((hour, index) => {
-        if (!hour || !hour.dt) return 'N/A';
+    const fullLabels = hourlyData.map(hour => {
+        if (!hour || !hour.dt) return '';
         const date = new Date(hour.dt * 1000);
-        if (index === 0) return "Now";
         return date.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
     });
+    // show datapoints but hide all label text on the x axis
+    const labels = fullLabels.map(() => '');
 
     const datasets = [
         {
@@ -286,33 +264,68 @@ function createHourlyChart(hourlyData) {
                     if (typeof hour.rain['1h'] !== 'undefined') rain = hour.rain['1h'];
                     else if (typeof hour.rain['3h'] !== 'undefined') rain = hour.rain['3h'] / 3;
                 }
-                return Math.max(0, rain);
+                rain = Number(rain) || 0;
+                return rain < 0 ? 0 : rain;
             }),
             chartType: "bar",
             y2Axis: true,
         },
     ];
 
-    // Destroy previous chart if exists
     if (hourlyChart) {
         hourlyChart = null;
     }
 
-    // Create new chart
     const chartContainer = document.getElementById("hourly-chart");
-    chartContainer.innerHTML = ""; // Clear container
+    chartContainer.innerHTML = "";
 
     const chartData = {
         labels: labels,
         datasets: datasets,
         yMarkers: [
             {
-                label: "Freezing",
+                label: "°C",
                 value: 0,
-                options: { labelPos: 'left' }
+                position: "left"
+            }
+        ],
+        xMarkers: [
+            {
+                label: "Now",
+                value: 0,
+            },
+            {
+                label: "1h",
+                value: 1,
+            },
+            {
+                label: "2h",
+                value: 2,
+            },
+            {
+                label: "3h",
+                value: 3,
+            },
+            {
+                label: "4h",
+                value: 4,
+            },
+            {
+                label: "5h",
+                value: 5,
+            },
+            {
+                label: "6h",
+                value: 6,
             }
         ]
     };
+
+    // if container width is zero (hidden), defer chart creation briefly
+    if (chartContainer.clientWidth === 0) {
+        setTimeout(() => createHourlyChart(hourlyData), 120);
+        return;
+    }
 
     hourlyChart = new frappe.Chart("#hourly-chart", {
         title: "Temperature & Weather Conditions",
@@ -327,7 +340,7 @@ function createHourlyChart(hourlyData) {
             spline: 1
         },
         barOptions: {
-            spaceRatio: 0.5
+            spaceRatio: 0.2
         },
         axisOptions: {
             xAxisMode: "tick",
@@ -336,13 +349,13 @@ function createHourlyChart(hourlyData) {
             y2AxisMode: "span"
         },
         tooltipOptions: {
-            formatTooltipX: d => d,
-            formatTooltipY: (d, index) => {
-                // Check if this is the rain dataset (3rd dataset, index 2)
-                if (index === 2) {
-                    return d + " mm/h";
-                }
-                return d + "°C";
+            formatTooltipX: function(label, i) {
+                if (label && String(label).trim()) return label;
+                if (typeof i !== 'undefined' && fullLabels[i]) return fullLabels[i];
+                return label || '';
+            },
+            formatTooltipY: function(value, idx) {
+                return (typeof idx !== 'undefined' && idx === 2) ? value + " mm/h" : value + "°C";
             }
         }
     });
@@ -355,10 +368,8 @@ function createHourlyCard(hourData, isNow) {
     
     // Format time
     const date = new Date(hourData.dt * 1000);
-    const timeString = isNow ? "Now" : date.toLocaleTimeString("en-US", { 
-        hour: "numeric", 
-        hour12: true 
-    });
+    const options = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+    const timeString = isNow ? "Now" : date.toLocaleTimeString("en-US", options);
     const dateString = date.toLocaleDateString("en-US", { 
         month: "short", 
         day: "numeric" 
@@ -371,7 +382,7 @@ function createHourlyCard(hourData, isNow) {
     const icon = hourData.weather[0].icon;
     const humidity = hourData.main.humidity;
     const windSpeed = hourData.wind.speed;
-    const pop = Math.round(hourData.pop * 100);
+    const pop = Math.round((hourData.pop || 0) * 100);
     
     card.innerHTML = `
         <div class="forecast-time">
@@ -415,7 +426,7 @@ function createDailyCard(dayData, isToday) {
     const icon = dayData.weather[0].icon;
     const humidity = dayData.humidity;
     const windSpeed = dayData.wind_speed.toFixed(1);
-    const pop = Math.round(dayData.pop * 100);
+    const pop = dayData.pop || 0;
     
     card.innerHTML = `
         <div class="forecast-day">
